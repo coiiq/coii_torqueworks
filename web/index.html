@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en" style="background: transparent !important; background-color: transparent !important;">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css?v=0.1.0">
+    <title>TorqueWorks Dyno</title>
+</head>
+<body style="background: transparent !important; background-color: transparent !important;">
+    <main id="dyno" class="hidden">
+        <header>
+            <div class="dyno-heading">
+                <p>POWER &amp; TORQUE TEST</p>
+                <h1>CHASSIS DYNO</h1>
+            </div>
+            <div class="dyno-session">
+                <small id="dyno-plate">NO VEHICLE</small>
+                <span id="status">ARMED</span>
+            </div>
+            <span class="dyno-exit-hint">ESC TO EXIT</span>
+            <button id="close" aria-label="Close dyno">×</button>
+        </header>
+
+        <section class="build" id="build"></section>
+
+        <section class="readouts">
+            <article><label>ENGINE</label><strong id="rpm">0</strong><small>RPM</small></article>
+            <article><label>WHEEL POWER</label><strong id="power">0.0</strong><small>WHP</small></article>
+            <article><label>WHEEL TORQUE</label><strong id="torque">0.0</strong><small>NM</small></article>
+            <article><label>BOOST</label><strong id="boost">0.000</strong><small>REL</small></article>
+            <article><label>ROLLER SPEED</label><strong id="speed">0.0</strong><small>KM/H</small></article>
+        </section>
+
+        <section class="chart-shell">
+            <canvas id="chart"></canvas>
+            <div class="legend">
+                <span class="power">POWER</span>
+                <span class="torque">TORQUE</span>
+                <span class="boost">BOOST</span>
+            </div>
+            <div id="instruction">HOLD FULL THROTTLE TO START</div>
+        </section>
+
+        <footer>
+            <span>CONTROLLED LOAD // GEAR <b id="gear">4</b></span>
+            <span id="ecu-state">ECU READY</span>
+            <span id="peaks">AWAITING PULL</span>
+        </footer>
+    </main>
+    <main id="mechanic" class="mechanic hidden">
+        <div class="workshop-fx" aria-hidden="true">
+            <i class="fx-corner fx-tl"></i><i class="fx-corner fx-br"></i>
+            <span class="fx-index">TORQUEWORKS // LIVE BUILD ENVIRONMENT</span>
+        </div>
+        <header class="mechanic-header">
+            <div class="brand-lockup">
+                <h1>BUILD TERMINAL <span id="mechanic-build-name" class="build-name hidden"></span><span id="mechanic-plate">NO VEHICLE</span></h1>
+                <button id="build-name-edit" aria-label="Edit build name" title="Edit build name">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13 7l4 4"/></svg>
+                </button>
+                <button id="car-settings-toggle" aria-label="Open car settings" title="Car settings">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"/></svg>
+                </button>
+                <form id="build-name-form" class="build-name-form hidden">
+                    <input id="build-name-input" type="text" maxlength="24" placeholder="BUILD NAME" autocomplete="off">
+                    <button type="submit">SAVE</button><button id="build-name-clear" type="button">CLEAR</button>
+                </form>
+                <section id="car-settings-panel" class="car-settings-panel hidden"></section>
+                <section id="ecu-custom-panel" class="car-settings-panel ecu-custom-panel hidden"></section>
+            </div>
+            <span id="mechanic-class" class="mechanic-class">D 100</span>
+            <button id="mechanic-close" aria-label="Close mechanic terminal">×</button>
+        </header>
+        <div id="hotspot-layer"></div>
+        <div class="workshop-rail">
+            <button id="build-overview">BUILD OVERVIEW</button>
+            <span id="workshop-selection">SELECT A COMPONENT</span>
+        </div>
+        <div id="upgrade-drawer" class="upgrade-drawer hidden">
+            <section id="mechanic-content"></section>
+        </div>
+        <div class="mechanic-layout hidden" aria-hidden="true">
+            <nav id="mechanic-nav">
+                <button data-view="installed" class="active">INSTALLED</button>
+                <button data-view="parts">PARTS</button>
+                <button data-view="ecu">ECU</button>
+                <button data-view="tires">TIRES</button>
+                <button data-view="drivetrain">DRIVETRAIN</button>
+                <button data-view="history">DYNO HISTORY</button>
+            </nav>
+        </div>
+        <div id="menu-watermark" class="menu-watermark" aria-hidden="true"></div>
+        <aside id="install-requirement-popover" class="install-requirement-popover hidden"></aside>
+        <aside id="quote-basket" class="quote-basket hidden">
+            <header><span>WORK ORDER</span><b id="quote-count">0 PARTS</b></header>
+            <div id="quote-lines"></div>
+            <footer><span>ESTIMATED TOTAL</span><strong id="quote-total">$0</strong></footer>
+            <div class="quote-actions"><button id="quote-clear">CLEAR</button><button id="quote-self">MY VEHICLE</button><button id="quote-send">SEND QUOTE</button></div>
+        </aside>
+    </main>
+    <aside id="customer-quote" class="customer-quote hidden" aria-label="Vehicle workshop quote">
+        <header><div><h1>BUILD ESTIMATE</h1></div><b id="customer-quote-plate">NO PLATE</b></header>
+        <section class="customer-quote-summary">
+            <div><small>MECHANIC</small><strong id="customer-quote-mechanic">MECHANIC</strong></div>
+            <div><small>CLASS CHANGE</small><strong id="customer-quote-class">D 300 → D 300</strong></div>
+        </section>
+        <section id="customer-quote-lines" class="customer-quote-lines"></section>
+        <section class="customer-quote-costs">
+            <span>PARTS <b id="customer-quote-parts">$0</b></span>
+            <span>LABOR <b id="customer-quote-labor">$0</b></span>
+            <strong>TOTAL <b id="customer-quote-total">$0</b></strong>
+        </section>
+        <footer>
+            <button data-quote-response="reject">REJECT</button>
+            <button data-quote-response="cash">PAY CASH</button>
+            <button data-quote-response="bank">PAY BANK</button>
+        </footer>
+    </aside>
+    <main id="vehicle-build-card" class="vehicle-build-card hidden" aria-label="Vehicle build card">
+        <button id="build-card-close" class="build-card-close" aria-label="Close build card">×</button>
+        <header>
+            <span id="build-card-manufacturer">CUSTOM</span>
+            <h1 id="build-card-model">VEHICLE</h1>
+            <p id="build-card-name"></p>
+        </header>
+        <section id="build-card-performance" class="build-card-performance"></section>
+        <section id="build-card-parts" class="build-card-parts"></section>
+        <footer id="build-card-owner" class="build-card-owner hidden">
+            <span>OWNER VISIBILITY</span>
+            <div>
+                <button data-visibility="PUBLIC">PUBLIC</button>
+                <button data-visibility="PERFORMANCE">PERFORMANCE ONLY</button>
+                <button data-visibility="PRIVATE">PRIVATE</button>
+            </div>
+        </footer>
+    </main>
+    <aside id="vehicle-build-preview" class="vehicle-build-preview hidden" aria-hidden="true">
+        <header><span id="preview-manufacturer">CUSTOM</span><strong id="preview-model">VEHICLE</strong><em id="preview-name"></em><b id="preview-class" class="preview-class">D 100</b></header>
+        <section id="preview-performance"></section>
+        <div id="preview-parts"></div>
+    </aside>
+    <aside id="nitro-hud" class="nitro-hud hidden" aria-label="Nitrous level">
+        <div class="nitro-bottle-cap"></div>
+        <div class="nitro-bottle-neck"></div>
+        <div class="nitro-bottle-body">
+            <i id="nitro-hud-fill"></i>
+            <span>N<small>2</small>O</span>
+        </div>
+        <div id="nitro-cooldown" class="nitro-cooldown hidden"><span id="nitro-delay-label">READY IN</span> <b>3.0</b></div>
+    </aside>
+    <aside id="mmi-controls" class="mmi-controls hidden" aria-hidden="true">
+        <span><kbd>↑</kbd><kbd>↓</kbd> NAVIGATE</span>
+        <span><kbd>←</kbd><kbd>→</kbd> ADJUST</span>
+        <span><kbd>ENTER</kbd> SELECT</span>
+        <span><kbd>F7</kbd> CLOSE</span>
+    </aside>
+    <script src="app.js?v=0.6.9"></script>
+    <script src="mechanic.js?v=0.9.44"></script>
+</body>
+</html>

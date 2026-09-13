@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="mmi.css"><link rel="stylesheet" href="mmi-theme.css?v=0.1.0"><title>TorqueWorks MMI</title></head>
+<body class="booting"><div id="boot" class="boot" aria-hidden="true">
+    <div class="boot-grid"></div><i class="boot-scan"></i>
+    <section><small>MMI // STARTING...</small><strong id="boot-name">INITIALIZING</strong><span id="boot-plate">MMI SYSTEM</span>
+        <div class="boot-status"><b>ECU LINK</b><b>DRIVETRAIN</b><b>SENSORS</b></div>
+        <div class="boot-progress"><i></i></div><em id="boot-message">ESTABLISHING VEHICLE LINK</em>
+    </section>
+</div><main>
+<header><span id="vehicle-name">VEHICLE</span><nav><button data-page="dash" class="active">DRIVE</button><button data-page="settings">SETTINGS</button><b id="plate">MMI</b><button id="close" aria-label="Close">&times;</button></nav></header>
+<section id="dash" class="page active">
+    <div class="hero"><div><small>ENGINE</small><strong><i id="rpm">0</i> RPM</strong></div><div class="gear"><small>GEAR</small><strong id="gear">N</strong></div></div>
+    <div class="metrics"><article><small>SPEED</small><b id="speed">0</b><em>KM/H</em></article><article><small>BOOST</small><b id="boost">0.00</b><em>REL</em></article><article><small>NITRO</small><b id="nitro">0</b><em>%</em></article><article><small>BRAKES</small><b id="brakes">0</b><em>&deg;C</em></article></div>
+</section>
+<section id="settings" class="page settings">
+    <article><label>TIRE PRESSURE <output id="pressure-value">32 PSI</output></label><input id="pressure" type="range" min="15" max="45" step="0.5" value="32"></article>
+    <article id="split-setting"><span class="setting-lock" aria-hidden="true">LOCK</span><label>FRONT TORQUE BIAS <output id="split-value">FACTORY</output></label><input id="split" type="range" min="0" max="100" step="5" value="50"><button id="factory-split">FACTORY</button></article>
+    <article class="toggle-row"><label>NITRO AUTO-REFILL</label><button id="auto-refill">ON</button></article>
+</section>
+<footer><span id="build">FACTORY BUILD</span><b id="map">MAP 1</b></footer>
+</main><script src="mmi.js?v=0.6.1"></script></body></html>

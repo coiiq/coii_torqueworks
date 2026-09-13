@@ -1,0 +1,13 @@
+html,body{background:var(--mmi-background);color:var(--mmi-text)}
+main{border-color:var(--mmi-text);background:linear-gradient(135deg,var(--mmi-surface),var(--mmi-background) 68%)}
+header b,footer b{background:var(--mmi-text);color:var(--mmi-background)}
+button,select{border-color:var(--mmi-border);background:var(--mmi-surface);color:var(--mmi-text)}
+button:hover,button.active,button.selected,button.key-selected,select.key-selected,input.key-selected{background:var(--mmi-text);color:var(--mmi-background)}
+button.key-selected,select.key-selected,input.key-selected{outline-color:var(--mmi-accent)}
+.hero small,.metrics small,footer{color:var(--mmi-muted)}
+.metrics article,.settings article{background:var(--mmi-surface)}
+.boot{background:var(--mmi-background);color:var(--mmi-text)}
+.boot section{border-left-color:var(--mmi-accent);background:linear-gradient(90deg,var(--mmi-surface),transparent)}
+.boot small{color:var(--mmi-accent)}
+.boot-scan,.boot-progress i{background:var(--mmi-accent);box-shadow:0 0 18px var(--mmi-accent)}
+.tw-no-carbon main{background-image:none;background-color:var(--mmi-background)}
