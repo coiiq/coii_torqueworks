@@ -9,7 +9,7 @@ Build a workshop around more than an upgrade menu. TorqueWorks lets mechanics pu
 <!-- MEDIA: Replace every REPLACE_ marker before publishing. Use repository-relative image paths or public HTTPS image URLs. -->
 ![TorqueWorks — workshop overview](https://i.imgur.com/CS0E2sh.png)
 
-[Download](REPLACE_DOWNLOAD_URL) · [Watch the showcase](REPLACE_SHOWCASE_VIDEO_URL) · [Discord]@coii
+[Watch the showcase](https://streamable.com/fd3mr2) · [Discord] @coii
 
 ## Features
 
@@ -35,8 +35,7 @@ Dyno figures and vehicle class changes are game-derived estimates, not real-worl
 
 ![Dyno results and history](https://i.imgur.com/1zpvlez.png)
 
-<!-- MEDIA: Clickable video thumbnail; replace both URLs -->
-[![Watch the TorqueWorks showcase](REPLACE_VIDEO_THUMBNAIL_URL)](REPLACE_SHOWCASE_VIDEO_URL)
+[![Watch the TorqueWorks showcase](https://i.imgur.com/1nsLEQE.png)(https://streamable.com/fd3mr2)
 
 ## Requirements
 
