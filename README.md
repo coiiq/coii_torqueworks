@@ -35,7 +35,7 @@ Dyno figures and vehicle class changes are game-derived estimates, not real-worl
 
 ![Dyno results and history](https://i.imgur.com/1zpvlez.png)
 
-[![Watch the TorqueWorks showcase](https://i.imgur.com/1nsLEQE.png)(https://streamable.com/fd3mr2)
+[![Watch the TorqueWorks showcase](https://i.imgur.com/1nsLEQE.png)](https://streamable.com/fd3mr2)
 
 ## Requirements
 
