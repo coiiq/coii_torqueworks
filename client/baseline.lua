@@ -55,15 +55,13 @@ function TorqueWorksBaseline.capture(vehicle)
     local cached = cache[vehicle]
     if cached and cached.model == model and cached.networkId == networkId then return cached end
 
-    local displayName = GetDisplayNameFromVehicleModel(model)
     local factoryGearCount = readFactoryGearCount(vehicle)
     local baseline = {
         model = model,
         networkId = networkId,
         transmission = readTransmission(vehicle, factoryGearCount),
         highGear = factoryGearCount,
-        turboModEnabled = IsToggleModOn(vehicle, 18),
-        engineAudio = type(displayName) == 'string' and displayName:lower() or ''
+        turboModEnabled = IsToggleModOn(vehicle, 18)
     }
     for key, field in pairs(fields) do
         baseline[key] = GetVehicleHandlingFloat(vehicle, handlingClass, field)
@@ -106,10 +104,6 @@ function TorqueWorksBaseline.applyStatic(vehicle, engine, flywheel, differential
     SetVehicleHandlingFloat(vehicle, handlingClass, fields.tractionLoss,
         baseline.tractionLoss * (suspension.surfaceLossMultiplier or 1.0) *
             (compound.surfaceLossMultiplier or 1.0))
-    if type(ForceVehicleEngineAudio) == 'function' then
-        pcall(ForceVehicleEngineAudio, vehicle,
-            type(engine.audioName) == 'string' and engine.audioName or baseline.engineAudio)
-    end
     SetVehicleHandlingFloat(vehicle, handlingClass, fields.clutchUp, baseline.clutchUp * personality.clutchUp)
     SetVehicleHandlingFloat(vehicle, handlingClass, fields.clutchDown, baseline.clutchDown * personality.clutchDown)
     local pressureDelta = math.abs(build.tirePressure - compound.optimalPressure)
@@ -181,9 +175,6 @@ function TorqueWorksBaseline.restore(vehicle, restoreTransmission)
     baseline.lastBrakeRefresh = 0
     baseline.lastDriveForceRefresh = 0
     SetVehicleCheatPowerIncrease(vehicle, 1.0)
-    if type(ForceVehicleEngineAudio) == 'function' then
-        pcall(ForceVehicleEngineAudio, vehicle, baseline.engineAudio)
-    end
     SetVehicleModKit(vehicle, 0)
     if IsToggleModOn(vehicle, 18) ~= baseline.turboModEnabled then
         ToggleVehicleMod(vehicle, 18, baseline.turboModEnabled)

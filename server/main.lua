@@ -366,9 +366,18 @@ local function enforcePartCompatibility(build, model)
     return changed
 end
 
-local function trustedState(row, build)
+local function trustedState(row, build, vehicle)
     local trustedBuild = copyBuild(build)
     trustedBuilds[row.plate] = trustedBuild
+    if vehicle and vehicle ~= 0 and DoesEntityExist(vehicle) then
+        local current = Entity(vehicle).state.torqueworksEffects
+        if type(current) ~= 'table' or current.plate ~= row.plate or
+            current.engine ~= build.engine or current.fuelpump ~= build.fuelpump then
+            Entity(vehicle).state:set('torqueworksEffects', {
+                plate = row.plate, engine = build.engine, fuelpump = build.fuelpump
+            }, true)
+        end
+    end
     return {
         plate = row.plate,
         build = trustedBuild,
@@ -459,7 +468,7 @@ RegisterNetEvent('coii_torqueworks:server:backfireSound', function(networkId, cl
         Config.EcuCalibration.pops[calibration.pops]
     if not popMode or not popMode.enabled then popMode = Config.EcuCalibration.pops.SPORT end
     -- Leave a small allowance for client/server timer and packet jitter. The
-    -- authoritative pump still limits how frequently audio may be replicated.
+    -- authoritative pump still limits how frequently bursts may be replicated.
     local syncCooldown = math.max(100,
         (tonumber(pump.cooldownMs) or 400) * (tonumber(popMode.cooldownMultiplier) or 1.0) - 75)
     if rateLimited(source, 'backfireSound', syncCooldown) then return end
@@ -468,15 +477,14 @@ RegisterNetEvent('coii_torqueworks:server:backfireSound', function(networkId, cl
     local sourceBucket = GetPlayerRoutingBucket(source)
     for _, playerId in ipairs(GetPlayers()) do
         local target = tonumber(playerId)
-        -- The driver plays the sound immediately alongside the local particle;
-        -- echo only to other nearby clients to avoid double audio.
+        -- The driver already renders this burst; relay it only to nearby observers.
         if target and target ~= source and GetPlayerRoutingBucket(target) == sourceBucket then
             local ped = GetPlayerPed(target)
             if ped ~= 0 then
                 local coords = GetEntityCoords(ped)
                 local dx, dy, dz = coords.x - origin.x, coords.y - origin.y, coords.z - origin.z
                 if dx * dx + dy * dy + dz * dz <= Config.TurboAudio.syncDistance ^ 2 then
-                    TriggerClientEvent('coii_torqueworks:client:backfireSound', target, networkId)
+                    TriggerClientEvent('coii_torqueworks:client:backfireSound', target, networkId, pumpId, plate)
                 end
             end
         end
@@ -500,7 +508,7 @@ lib.callback.register('coii_torqueworks:server:getTorqueWorks', function(source,
     local compatibilityChanged = enforcePartCompatibility(build, model)
     if migrated or compatibilityChanged then TorqueWorksRepository.saveBuild(plate, build) end
     applyMmiState(vehicle, plate)
-    return trustedState(row, build)
+    return trustedState(row, build, vehicle)
 end)
 
 RegisterNetEvent('coii_torqueworks:server:setTransmissionPersonality', function(requestedPersonality, plate, networkId)
@@ -517,7 +525,7 @@ RegisterNetEvent('coii_torqueworks:server:setTransmissionPersonality', function(
     build.transmissionPersonality = personality
     if not TorqueWorksRepository.saveBuild(normalized, build) then return end
     TriggerClientEvent('coii_torqueworks:client:buildCardChanged', -1, normalized)
-    TriggerClientEvent('coii_torqueworks:client:buildApplied', source, trustedState(row, build), networkId)
+    TriggerClientEvent('coii_torqueworks:client:buildApplied', source, trustedState(row, build, vehicle), networkId)
 end)
 
 RegisterNetEvent('coii_torqueworks:server:setPart', function(requestedCategory, requestedPart, plate, networkId)
@@ -575,7 +583,7 @@ RegisterNetEvent('coii_torqueworks:server:setPart', function(requestedCategory, 
         end
     end
     TriggerClientEvent('coii_torqueworks:client:buildCardChanged', -1, plate)
-    TriggerClientEvent('coii_torqueworks:client:buildApplied', source, trustedState(row, build), networkId)
+    TriggerClientEvent('coii_torqueworks:client:buildApplied', source, trustedState(row, build, vehicle), networkId)
 end)
 
 RegisterNetEvent('coii_torqueworks:server:setBuildName', function(requestedName, plate, networkId)
@@ -589,7 +597,7 @@ RegisterNetEvent('coii_torqueworks:server:setBuildName', function(requestedName,
     build.buildName = normalizeBuildName(requestedName)
     if not TorqueWorksRepository.saveBuild(normalized, build) then return end
     TriggerClientEvent('coii_torqueworks:client:buildCardChanged', -1, normalized)
-    TriggerClientEvent('coii_torqueworks:client:buildApplied', source, trustedState(row, build), networkId)
+    TriggerClientEvent('coii_torqueworks:client:buildApplied', source, trustedState(row, build, vehicle), networkId)
 end)
 
 RegisterNetEvent('coii_torqueworks:server:resetBuild', function(plate, networkId)
@@ -609,7 +617,7 @@ RegisterNetEvent('coii_torqueworks:server:resetBuild', function(plate, networkId
     build.buildVisibility = previous.buildVisibility
     if not row or not TorqueWorksRepository.saveBuild(plate, build) then return end
     TriggerClientEvent('coii_torqueworks:client:buildCardChanged', -1, plate)
-    TriggerClientEvent('coii_torqueworks:client:buildApplied', source, trustedState(row, build), networkId)
+    TriggerClientEvent('coii_torqueworks:client:buildApplied', source, trustedState(row, build, vehicle), networkId)
 end)
 
 local function nearbyVehicle(source, plate, networkId)
@@ -730,7 +738,7 @@ RegisterNetEvent('coii_torqueworks:server:setEcuMap', function(requestedMap, pla
     build.ecuCalibration.customEnabled = false
     if not TorqueWorksRepository.saveBuild(plate, build) then return end
     TriggerClientEvent('coii_torqueworks:client:buildCardChanged', -1, plate)
-    TriggerClientEvent('coii_torqueworks:client:buildApplied', source, trustedState(row, build), networkId)
+    TriggerClientEvent('coii_torqueworks:client:buildApplied', source, trustedState(row, build, vehicle), networkId)
 end)
 
 RegisterNetEvent('coii_torqueworks:server:setEcuCalibration', function(requested, plate, networkId)
@@ -746,7 +754,7 @@ RegisterNetEvent('coii_torqueworks:server:setEcuCalibration', function(requested
     if not TorqueWorksRepository.saveBuild(normalized, build) then return end
     TriggerClientEvent('coii_torqueworks:client:buildCardChanged', -1, normalized)
     TriggerClientEvent('coii_torqueworks:client:buildApplied', source,
-        trustedState(row, build), NetworkGetNetworkIdFromEntity(vehicle), true)
+        trustedState(row, build, vehicle), NetworkGetNetworkIdFromEntity(vehicle), true)
 end)
 
 RegisterNetEvent('coii_torqueworks:server:setChassisSetting', function(requestedSetting, requestedValue, plate, networkId)
@@ -802,7 +810,7 @@ RegisterNetEvent('coii_torqueworks:server:setChassisSetting', function(requested
     if setting == 'split' then build.frontTorqueBias = trustedValue end
     if not TorqueWorksRepository.saveBuild(plate, build) then return end
     TriggerClientEvent('coii_torqueworks:client:buildCardChanged', -1, plate)
-    TriggerClientEvent('coii_torqueworks:client:buildApplied', source, trustedState(row, build), networkId)
+    TriggerClientEvent('coii_torqueworks:client:buildApplied', source, trustedState(row, build, vehicle), networkId)
 end)
 
 lib.callback.register('coii_torqueworks:server:getMechanicData', function(source, plate, networkId, workshopId)
@@ -825,7 +833,7 @@ lib.callback.register('coii_torqueworks:server:getMechanicData', function(source
     return {
         authorized = true,
         workshop = { id = workshopId, name = workshop.name or workshopId },
-        state = trustedState(row, build),
+        state = trustedState(row, build, vehicle),
         history = TorqueWorksRepository.getDynoHistory(normalized, 10),
         lockedParts = lockedPartsForModel(GetEntityModel(vehicle)),
         installationBypass = installationBypass(source),
@@ -858,7 +866,7 @@ RegisterNetEvent('coii_torqueworks:server:resetEcu', function(plate, networkId)
     build.ecuCalibration = normalizeEcuCalibration(Config.FactoryBuild.ecuCalibration)
     if not TorqueWorksRepository.saveBuild(normalized, build) then return end
     TriggerClientEvent('coii_torqueworks:client:buildCardChanged', -1, normalized)
-    TriggerClientEvent('coii_torqueworks:client:buildApplied', source, trustedState(row, build), networkId)
+    TriggerClientEvent('coii_torqueworks:client:buildApplied', source, trustedState(row, build, vehicle), networkId)
 end)
 
 local function sanitizeDynoSamples(samples)
@@ -928,9 +936,10 @@ local function finishNitroSession(playerId)
     local session = nitroSessions[playerId]
     if not session then return end
     nitroSessions[playerId] = nil
-    for _, recipient in ipairs(session.trailRecipients or {}) do
-        TriggerClientEvent('coii_torqueworks:client:nitroTrailSync', recipient,
-            session.networkId, false)
+    local vehicle = session.vehicle
+    if DoesEntityExist(vehicle) and NetworkGetNetworkIdFromEntity(vehicle) == session.networkId and
+        normalizePlate(GetVehicleNumberPlateText(vehicle)) == session.plate then
+        Entity(vehicle).state:set('torqueworksNitro', false, true)
     end
     nitroReuseAt[playerId] = GetGameTimer() + Config.Nitro.reuseDelayMs
     local row = TorqueWorksRepository.get(session.plate)
@@ -957,21 +966,22 @@ lib.callback.register('coii_torqueworks:server:startNitro', function(source, pla
     if build.nitroLevel <= 0.001 then return 0 end
     nitroSessions[source] = {
         plate = normalized, startedAt = GetGameTimer(), initialLevel = build.nitroLevel,
-        fullDurationMs = math.max(1, system.durationMs), networkId = networkId,
-        trailRecipients = {}
+        fullDurationMs = math.max(1, system.durationMs), networkId = networkId, vehicle = vehicle
     }
-    local vehicleCoords = GetEntityCoords(vehicle)
-    for _, playerId in ipairs(GetPlayers()) do
-        local recipient = tonumber(playerId)
-        if recipient and recipient ~= source then
-            local ped = GetPlayerPed(recipient)
-            if ped ~= 0 and #(GetEntityCoords(ped) - vehicleCoords) <= Config.Nitro.trailSyncDistance then
-                nitroSessions[source].trailRecipients[#nitroSessions[source].trailRecipients + 1] = recipient
-                TriggerClientEvent('coii_torqueworks:client:nitroTrailSync', recipient,
-                    networkId, true, Config.Nitro.taillightTrailColor)
+    local session = nitroSessions[source]
+    Entity(vehicle).state:set('torqueworksNitro', {
+        plate = normalized, driver = source, system = build.nitro
+    }, true)
+    CreateThread(function()
+        local endsAt = session.startedAt + session.fullDurationMs * session.initialLevel
+        while nitroSessions[source] == session do
+            if GetGameTimer() >= endsAt or driverVehicle(source) ~= vehicle then
+                finishNitroSession(source)
+                return
             end
+            Wait(100)
         end
-    end
+    end)
     return build.nitroLevel
 end)
 
@@ -1085,7 +1095,7 @@ RegisterNetEvent('coii_torqueworks:server:setMmiSetting', function(requestedSett
     if not TorqueWorksRepository.saveBuild(normalized, build) then return end
     TriggerClientEvent('coii_torqueworks:client:buildCardChanged', -1, normalized)
     TriggerClientEvent('coii_torqueworks:client:buildApplied', source,
-        trustedState(row, build), NetworkGetNetworkIdFromEntity(vehicle), true)
+        trustedState(row, build, vehicle), NetworkGetNetworkIdFromEntity(vehicle), true)
 end)
 
 RegisterNetEvent('coii_torqueworks:server:refillNitro', function(plate, networkId, automatic)
@@ -1124,7 +1134,7 @@ RegisterNetEvent('coii_torqueworks:server:refillNitro', function(plate, networkI
     xPlayer.removeInventoryItem(Config.Nitro.refillItem, 1)
     -- A refill only changes consumable state. Refresh the server-owned cache without
     -- reapplying the entire build client-side, which would restart custom engine audio.
-    trustedState(row, build)
+    trustedState(row, build, vehicle)
     TriggerClientEvent('coii_torqueworks:client:buildCardChanged', -1, normalized)
     TriggerClientEvent('coii_torqueworks:client:nitroLevel', source, 1.0)
     Config.Integrations.serverNotification(source, {
@@ -1434,7 +1444,7 @@ local function settleQuotedBuild(order, customerSource, paymentMethod, token, ac
         return
     end
     settlingPlates[order.plate], settlingPlayers[customerSource], settlingPlayers[mechanicSource] = nil, nil, nil
-    local state = trustedState(prepared.row, prepared.build)
+    local state = trustedState(prepared.row, prepared.build, prepared.vehicle)
     TriggerClientEvent('coii_torqueworks:client:workOrderCompleted', mechanicSource)
     TriggerClientEvent('coii_torqueworks:client:buildCardChanged', -1, order.plate)
     TriggerClientEvent('coii_torqueworks:client:buildApplied', mechanicSource, state, quote.networkId, true)

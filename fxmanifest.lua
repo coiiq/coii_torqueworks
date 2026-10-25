@@ -33,6 +33,7 @@ client_scripts {
     'client/backfire.lua',
     'client/runtime.lua',
     'client/nitro.lua',
+    'client/vehicle_sync.lua',
     'client/dyno.lua',
     'client/build_card.lua',
     'client/mechanic.lua',

@@ -63,48 +63,31 @@ function TorqueWorksBackfire.cleanup(vehicle)
     end
 end
 
-function TorqueWorksBackfire.trigger(active, waitForAsset)
-    local pump = active and active.parts and active.parts.fuelpump
-    if not pump or not pump.backfire or not DoesEntityExist(active.vehicle) then return false end
-    local now = GetGameTimer()
-    local popMode = active.ecuCalibration and active.ecuCalibration.customEnabled and
-        Config.EcuCalibration.pops[active.ecuCalibration.pops]
-    -- A backfire-capable pump may produce one shift pop without a custom ECU
-    -- overrun map. CUSTOM Pops & Bangs controls the repeated throttle-lift burst.
-    if not popMode or not popMode.enabled then popMode = Config.EcuCalibration.pops.SPORT end
-    local cooldown = pump.cooldownMs * (popMode.cooldownMultiplier or 1.0)
-    if now - (active.lastBackfire or 0) < cooldown then return false, 'cooldown' end
-    if not loadAsset(pump.particleDictionary, waitForAsset == true) then return false, 'asset' end
+local function renderBurst(vehicle, pump, waitForAsset)
+    if not pump or not pump.backfire or not DoesEntityExist(vehicle) then return false end
+    local model = GetEntityModel(vehicle)
+    local plate = GetVehicleNumberPlateText(vehicle)
+    local networkId = NetworkGetEntityIsNetworked(vehicle) and NetworkGetNetworkIdFromEntity(vehicle) or 0
+    if not loadAsset(pump.particleDictionary, waitForAsset) then return false, 'asset' end
+    if not DoesEntityExist(vehicle) or GetEntityModel(vehicle) ~= model or
+        GetVehicleNumberPlateText(vehicle) ~= plate or
+        (networkId ~= 0 and (not NetworkGetEntityIsNetworked(vehicle) or
+            NetworkGetNetworkIdFromEntity(vehicle) ~= networkId)) then return false end
 
-    local burst = { vehicle = active.vehicle, handles = {} }
+    local burst = { vehicle = vehicle, handles = {} }
     for _, boneName in ipairs(exhaustBones) do
-        local bone = GetEntityBoneIndexByName(active.vehicle, boneName)
+        local bone = GetEntityBoneIndexByName(vehicle, boneName)
         if bone ~= -1 then
-            local handle = startLoopedParticle(pump, active.vehicle, bone)
+            local handle = startLoopedParticle(pump, vehicle, bone)
             if handle then burst.handles[#burst.handles + 1] = handle end
         end
     end
-
     local method = 'bones'
     if #burst.handles == 0 then
-        local handle = startFallbackParticle(pump, active.vehicle)
-        if handle then
-            burst.handles[1] = handle
-            method = 'fallback'
-        end
+        local handle = startFallbackParticle(pump, vehicle)
+        if handle then burst.handles[1], method = handle, 'fallback' end
     end
     if #burst.handles == 0 then return false, 'effect' end
-
-    active.lastBackfire = now
-    -- The emitting client owns the visual trigger, so play its matching sound
-    -- immediately. Waiting for a server round trip allowed the server cooldown
-    -- to discard valid bursts close to the configured boundary.
-    if TorqueWorksTurboAudio and TorqueWorksTurboAudio.playSpatial then
-        TorqueWorksTurboAudio.playSpatial(active.vehicle,
-            'audio/turbos/backfirepop.wav', 0.10, 'exhaust')
-    end
-    TriggerServerEvent('coii_torqueworks:server:backfireSound',
-        NetworkGetNetworkIdFromEntity(active.vehicle), active.build.fuelpump)
     activeBursts[#activeBursts + 1] = burst
     CreateThread(function()
         Wait(math.max(50, tonumber(pump.particleDurationMs) or 145))
@@ -119,11 +102,40 @@ function TorqueWorksBackfire.trigger(active, waitForAsset)
     return true, method
 end
 
-RegisterNetEvent('coii_torqueworks:client:backfireSound', function(networkId)
-    if not TorqueWorksTurboAudio or not TorqueWorksTurboAudio.playSpatial then return end
-    local vehicle = NetToVeh(tonumber(networkId) or 0)
-    TorqueWorksTurboAudio.playSpatial(vehicle,
-        'audio/turbos/backfirepop.wav', 0.13, 'exhaust')
+function TorqueWorksBackfire.trigger(active, waitForAsset)
+    local pump = active and active.parts and active.parts.fuelpump
+    if not pump or not pump.backfire or not DoesEntityExist(active.vehicle) then return false end
+    local now = GetGameTimer()
+    local popMode = active.ecuCalibration and active.ecuCalibration.customEnabled and
+        Config.EcuCalibration.pops[active.ecuCalibration.pops]
+    if not popMode or not popMode.enabled then popMode = Config.EcuCalibration.pops.SPORT end
+    local cooldown = pump.cooldownMs * (popMode.cooldownMultiplier or 1.0)
+    if now - (active.lastBackfire or 0) < cooldown then return false, 'cooldown' end
+    local rendered, method = renderBurst(active.vehicle, pump, waitForAsset == true)
+    if not rendered then return false, method end
+    active.lastBackfire = now
+    if TorqueWorksTurboAudio and TorqueWorksTurboAudio.playSpatial then
+        TorqueWorksTurboAudio.playSpatial(active.vehicle, 'audio/turbos/backfirepop.wav', 0.10, 'exhaust')
+    end
+    if NetworkGetEntityIsNetworked(active.vehicle) then
+        TriggerServerEvent('coii_torqueworks:server:backfireSound',
+            NetworkGetNetworkIdFromEntity(active.vehicle), active.build.fuelpump)
+    end
+    return true, method
+end
+
+RegisterNetEvent('coii_torqueworks:client:backfireSound', function(networkId, pumpId, plate)
+    if type(networkId) ~= 'number' or not NetworkDoesEntityExistWithNetworkId(networkId) then return end
+    local vehicle = NetToVeh(networkId)
+    local pump = type(pumpId) == 'string' and Config.Parts.fuelpump[pumpId]
+    if vehicle == 0 or not DoesEntityExist(vehicle) or GetEntityType(vehicle) ~= 2 then return end
+    if GetVehicleNumberPlateText(vehicle):upper():gsub('^%s+', ''):gsub('%s+$', '') ~= plate then return end
+    -- Observers render locally from the server-validated pump, without relaying another event.
+    CreateThread(function()
+        if renderBurst(vehicle, pump, true) and TorqueWorksTurboAudio and TorqueWorksTurboAudio.playSpatial then
+            TorqueWorksTurboAudio.playSpatial(vehicle, 'audio/turbos/backfirepop.wav', 0.13, 'exhaust')
+        end
+    end)
 end)
 
 function TorqueWorksBackfire.update(active, rpm, throttle)

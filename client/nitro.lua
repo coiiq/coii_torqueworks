@@ -18,12 +18,13 @@ end
 
 local nitroLightTrails = {}
 
-function CreateVehicleLightTrail(vehicle, bone, scale, r, g, b)
+function CreateVehicleLightTrail(vehicle, bone, scale, r, g, b, isCurrent)
     if bone == -1 then return nil end
     RequestNamedPtfxAsset('core')
     local deadline = GetGameTimer() + 1500
     while not HasNamedPtfxAssetLoaded('core') and GetGameTimer() < deadline do Wait(0) end
     if not HasNamedPtfxAssetLoaded('core') then return nil end
+    if not DoesEntityExist(vehicle) or (isCurrent and not isCurrent()) then return nil end
     UseParticleFxAssetNextCall('core')
     local handle = StartParticleFxLoopedOnEntityBone('veh_light_red_trail', vehicle,
         0.0, 0.0, 0.0, 0.0, 0.0, 0.0, bone, scale,
@@ -52,9 +53,9 @@ function StopVehicleLightTrail(handle, duration)
     end)
 end
 
-function SetVehicleNitroLightTrail(vehicle, enabled, r, g, b)
-    if not DoesEntityExist(vehicle) then return false end
+function SetVehicleNitroLightTrail(vehicle, enabled, r, g, b, isCurrent)
     if enabled then
+        if not DoesEntityExist(vehicle) or (isCurrent and not isCurrent()) then return false end
         if nitroLightTrails[vehicle] then return true end
         if type(CreateVehicleLightTrail) ~= 'function' then return false end
         local color = Config.Nitro.taillightTrailColor
@@ -66,13 +67,18 @@ function SetVehicleNitroLightTrail(vehicle, enabled, r, g, b)
         local right = GetEntityBoneIndexByName(vehicle, 'taillight_r')
         if left ~= -1 then
             local ok, handle = pcall(CreateVehicleLightTrail, vehicle, left,
-                Config.Nitro.taillightTrailScale, r, g, b)
+                Config.Nitro.taillightTrailScale, r, g, b, isCurrent)
             if ok and handle and handle ~= 0 then trails.left = handle end
         end
         if right ~= -1 then
             local ok, handle = pcall(CreateVehicleLightTrail, vehicle, right,
-                Config.Nitro.taillightTrailScale, r, g, b)
+                Config.Nitro.taillightTrailScale, r, g, b, isCurrent)
             if ok and handle and handle ~= 0 then trails.right = handle end
+        end
+        if isCurrent and not isCurrent() then
+            if trails.left then StopParticleFxLooped(trails.left, false) end
+            if trails.right then StopParticleFxLooped(trails.right, false) end
+            return false
         end
         if trails.left or trails.right then
             nitroLightTrails[vehicle] = trails
@@ -161,9 +167,10 @@ local function loadParticleDictionary(dictionary)
     return HasNamedPtfxAssetLoaded(dictionary)
 end
 
-local function startParticles(vehicle, destination, scale)
+local function startParticles(vehicle, destination, scale, isCurrent)
     local config = Config.Nitro
     if not loadParticleDictionary(config.particleDictionary) then return false end
+    if not DoesEntityExist(vehicle) or (isCurrent and not isCurrent()) then return false end
     destination = destination or TorqueWorksNitro.particles
     local started = false
     for _, boneName in ipairs(config.exhaustBones) do
@@ -190,6 +197,63 @@ local function startParticles(vehicle, destination, scale)
     end
     RemoveNamedPtfxAsset(config.particleDictionary)
     return started
+end
+
+local remoteNitro = {}
+
+local function remoteIdentity(vehicle, entry)
+    return DoesEntityExist(vehicle) and NetworkGetEntityIsNetworked(vehicle) and
+        NetworkGetNetworkIdFromEntity(vehicle) == entry.networkId and GetEntityModel(vehicle) == entry.model and
+        GetVehicleNumberPlateText(vehicle):upper():gsub('^%s+', ''):gsub('%s+$', '') == entry.plate
+end
+
+local function stopRemote(vehicle)
+    local entry = remoteNitro[vehicle]
+    if not entry then return end
+    remoteNitro[vehicle] = nil
+    for _, handle in ipairs(entry.particles) do StopParticleFxLooped(handle, false) end
+    if TorqueWorksNitro.vehicle ~= vehicle then
+        SetVehicleNitroLightTrail(vehicle, false)
+    end
+end
+
+function TorqueWorksNitro.syncRemote(vehicle, state)
+    local system = type(state) == 'table' and Config.Parts.nitro[state.system]
+    if not system or not system.enabled or state.driver == GetPlayerServerId(PlayerId()) or
+        GetPedInVehicleSeat(vehicle, -1) == PlayerPedId() or
+        GetVehicleNumberPlateText(vehicle):upper():gsub('^%s+', ''):gsub('%s+$', '') ~= state.plate or
+        #(GetEntityCoords(vehicle) - GetEntityCoords(PlayerPedId())) > Config.Nitro.trailSyncDistance then
+        stopRemote(vehicle)
+        return
+    end
+    local entry = remoteNitro[vehicle]
+    if entry and remoteIdentity(vehicle, entry) and entry.driver == state.driver and entry.system == state.system then return end
+    stopRemote(vehicle)
+    entry = { particles = {}, plate = state.plate, driver = state.driver, system = state.system,
+        model = GetEntityModel(vehicle), networkId = NetworkGetNetworkIdFromEntity(vehicle) }
+    remoteNitro[vehicle] = entry
+    local function isCurrent()
+        if remoteNitro[vehicle] ~= entry or not remoteIdentity(vehicle, entry) or
+            GetPedInVehicleSeat(vehicle, -1) == PlayerPedId() then return false end
+        local latest = Entity(vehicle).state.torqueworksNitro
+        return type(latest) == 'table' and latest.plate == entry.plate and
+            latest.driver == entry.driver and latest.system == entry.system
+    end
+    CreateThread(function()
+        if not startParticles(vehicle, entry.particles, system.particleScale, isCurrent) then
+            if remoteNitro[vehicle] == entry then stopRemote(vehicle) end
+            return
+        end
+        local color = Config.Nitro.taillightTrailColor
+        SetVehicleNitroLightTrail(vehicle, true, color.r, color.g, color.b, isCurrent)
+        if not isCurrent() and remoteNitro[vehicle] == entry then stopRemote(vehicle) end
+    end)
+end
+
+function TorqueWorksNitro.pruneRemote()
+    for vehicle, entry in pairs(remoteNitro) do
+        if not remoteIdentity(vehicle, entry) then stopRemote(vehicle) end
+    end
 end
 
 function TorqueWorksNitro.shiftBurst(vehicle)
@@ -243,6 +307,7 @@ function TorqueWorksNitro.activate()
     end
 
     now = GetGameTimer()
+    stopRemote(vehicle)
     stopNitro()
     TorqueWorksNitro.active = true
     TorqueWorksNitro.vehicle = vehicle
@@ -260,7 +325,10 @@ function TorqueWorksNitro.activate()
     SendNUIMessage({ action = 'nitroSound', enabled = true,
         volume = Config.Nitro.soundVolume })
     SetVehicleNitroLightTrail(vehicle, true)
-    local particleStarted = startParticles(vehicle, TorqueWorksNitro.particles, nitro.particleScale)
+    local particleStarted = startParticles(vehicle, TorqueWorksNitro.particles, nitro.particleScale, function()
+        return TorqueWorksNitro.active and TorqueWorksNitro.vehicle == vehicle
+    end)
+    if not TorqueWorksNitro.active or TorqueWorksNitro.vehicle ~= vehicle then return end
     SendNUIMessage({ action = 'nitroHud', visible = true, level = initialLevel, label = nitro.label })
     TorqueWorksUI.notify({
         type = particleStarted and 'success' or 'inform',
@@ -313,22 +381,6 @@ RegisterNetEvent('coii_torqueworks:client:nitroLevel', function(level)
     if TorqueWorks.active and TorqueWorks.active.build then
         TorqueWorks.active.build.nitroLevel = TorqueWorksMath.clamp(tonumber(level) or 0.0, 0.0, 1.0)
     end
-end)
-
-RegisterNetEvent('coii_torqueworks:client:nitroTrailSync', function(networkId, enabled, color)
-    networkId = tonumber(networkId)
-    if not networkId then return end
-    CreateThread(function()
-        local deadline = GetGameTimer() + 2000
-        local vehicle = NetToVeh(networkId)
-        while enabled and vehicle == 0 and GetGameTimer() < deadline do
-            Wait(50)
-            vehicle = NetToVeh(networkId)
-        end
-        if vehicle == 0 or not DoesEntityExist(vehicle) then return end
-        color = type(color) == 'table' and color or Config.Nitro.taillightTrailColor
-        SetVehicleNitroLightTrail(vehicle, enabled == true, color.r, color.g, color.b)
-    end)
 end)
 
 local refillInProgress = false
@@ -401,6 +453,7 @@ end)
 AddEventHandler('onResourceStop', function(resource)
     if resource == GetCurrentResourceName() then
         stopNitro(false)
+        for vehicle in pairs(remoteNitro) do stopRemote(vehicle) end
         for vehicle in pairs(nitroLightTrails) do SetVehicleNitroLightTrail(vehicle, false) end
         SendNUIMessage({ action = 'nitroSound', enabled = false })
     end
